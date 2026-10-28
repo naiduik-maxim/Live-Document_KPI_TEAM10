@@ -150,13 +150,4 @@ compose.yaml          PostgreSQL + Django + Nginx/React
 .env.example          лише приклади, без справжніх секретів
 ```
 
-- [Архітектура та права](docs/architecture.md)
-- [Контракт API](docs/api-contract.md)
-- [Структура Python-коду та перевірка PEP 8](docs/python-style.md)
-- [Структура Backend/Frontend та коментарі](docs/source-map.md)
-- [Припущення](docs/assumptions.md)
-- [План та відповідність вимог](docs/test-plan.md)
-- [Тест-кейси](docs/test-cases.md), [чекліст](docs/checklist.md), [дефекти](docs/bug-report.md)
-- [Підтримуване форматування Word](docs/document-format.md)
-- [Звіт про готовність](docs/readiness.md)
 
