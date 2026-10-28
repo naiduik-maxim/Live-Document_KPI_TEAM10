@@ -1,0 +1,13 @@
+[tool.black]
+line-length = 79
+target-version = ["py312"]
+extend-exclude = '''
+/(\.venv|\.tools|node_modules|migrations)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 79
+known_first_party = ["config", "core", "tests"]
+extend_skip = [".venv", ".tools", "node_modules", "migrations"]
+

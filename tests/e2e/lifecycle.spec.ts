@@ -1,0 +1,140 @@
+import {test, expect, Page} from '@playwright/test';
+const password = 'Synthetic-E2E-Password-491!';
+async function login(page: Page, role='teacher', path='/') {
+  await page.goto(path);
+  await page.getByLabel('Логін', {exact:true}).fill(`e2e_${role}`);
+  await page.getByLabel('Пароль', {exact:true}).fill(password);
+  await page.getByRole('button', {name:'Увійти', exact:true}).click();
+  await expect(page.getByRole('button', {name:'Вийти',exact:true})).toBeVisible();
+}
+async function logout(page: Page) {
+  await page.getByRole('button', {name:'Вийти',exact:true}).click();
+  await expect(page.getByRole('button', {name:'Увійти',exact:true})).toBeVisible();
+}
+async function overflow(page: Page) {
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBeTruthy();
+}
+async function create(page: Page, title:string) {
+  await page.goto('/templates');
+  const card = page.locator('article').filter({has:page.getByRole('heading',{name:'Заява',exact:true})});
+  await card.getByRole('link',{name:'Використати →'}).click();
+  await page.getByLabel('Назва документа').fill(title);
+  await page.getByLabel('Адресат').fill('Керівнику кафедри');
+  await page.getByLabel('ПІБ заявника').fill('Тестовий Викладач');
+  await page.getByLabel('Прошу').fill('Український текст <script>window.qaXss=1</script>\n- Перший пункт');
+  await page.getByRole('textbox',{name:'Дата',exact:true}).fill('2026-10-19');
+  await page.getByRole('button',{name:'Зберегти документ',exact:true}).click();
+  await expect(page).toHaveURL(/\/documents\/\d+$/);
+  return new URL(page.url()).pathname;
+}
+test('повний альтернативний цикл, історія, DOCX, архів та адаптивність', async ({page}, info) => {
+  const title=`QA цикл ${info.project.name} ${Date.now()}`;
+  await login(page);
+  await page.screenshot({path:info.outputPath('dashboard.png'),fullPage:true});
+  await overflow(page);
+  const path=await create(page,title);
+  await expect(page.getByRole('heading',{name:title,exact:true})).toBeVisible();
+  await expect(page.locator('dd').filter({hasText:'<script>'})).toContainText('Український текст');
+  expect(await page.evaluate(() => (window as unknown as {qaXss?:number}).qaXss)).toBeUndefined();
+  await page.getByRole('button',{name:'Попередній перегляд',exact:true}).click();
+  await expect(page.frameLocator('iframe').getByText('Український текст', {exact:false})).toBeVisible();
+  await page.getByRole('button',{name:'Надіслати на погодження'}).click();
+  await expect(page.locator('.heading .badge, .page-heading .badge, .badge').first()).toContainText('На погодженні');
+  await logout(page);
+  await login(page,'manager',path);
+  await expect(page).toHaveURL(new RegExp(path+'$'));
+  await expect(page.getByRole('button',{name:'Повернути на доопрацювання'})).toBeDisabled();
+  await page.getByLabel('Коментар погодження').fill('Уточніть формулювання');
+  await page.getByRole('button',{name:'Повернути на доопрацювання'}).click();
+  await expect(page.locator('.badge').first()).toContainText('На доопрацюванні');
+  await logout(page);
+  await login(page,'teacher',path);
+  await page.getByRole('button',{name:'Редагувати',exact:true}).click();
+  await page.getByLabel('Прошу').fill('Виправлений український текст\n- Пункт');
+  await page.getByRole('button',{name:'Зберегти документ',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Редагувати',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Надіслати на погодження'}).click();
+  await expect(page.locator('.badge').first()).toContainText('На погодженні');
+  await logout(page);
+  await login(page,'manager',path);
+  await page.getByRole('button',{name:'Затвердити',exact:true}).click();
+  await expect(page.locator('.badge').first()).toContainText('Затверджено');
+  await logout(page);
+  await login(page,'teacher',path);
+  await page.getByRole('button',{name:'Завершити документ'}).click();
+  await expect(page.locator('.badge').first()).toContainText('Завершено');
+  await expect(page.getByRole('button',{name:'Редагувати',exact:true})).toHaveCount(0);
+  await expect(page.locator('.timeline')).toContainText('Уточніть формулювання');
+  await expect(page.locator('.timeline li')).toHaveCount(7);
+  await expect(page.getByText('· зупинено',{exact:false})).toBeVisible();
+  const downloadPromise=page.waitForEvent('download');
+  await page.getByRole('link',{name:'↓ Word'}).click();
+  const download=await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/\.docx$/);
+  await download.saveAs(info.outputPath('completed.docx'));
+  await overflow(page);
+  await page.screenshot({path:info.outputPath('completed.png'),fullPage:true});
+  await page.goto('/archive');
+  await page.getByLabel('Пошук',{exact:true}).fill(title);
+  await expect(page.getByRole('link',{name:title,exact:true})).toBeVisible();
+  await overflow(page);
+  await page.screenshot({path:info.outputPath('archive.png'),fullPage:true});
+});
+
+test('помилки входу, required, прямий URL і 409 без втрати тексту',async ({page,browser},info)=>{
+  await page.goto('/login');
+  await page.getByLabel('Логін',{exact:true}).fill('e2e_teacher');
+  await page.getByLabel('Пароль',{exact:true}).fill('wrong');
+  await page.getByRole('button',{name:'Увійти',exact:true}).click();
+  await expect(page.getByRole('alert')).toBeVisible();
+  await login(page);
+  const path=await create(page,`QA конфлікт ${info.project.name} ${Date.now()}`);
+  const second=await browser.newPage();
+  await login(second,'teacher',path);
+  await page.getByRole('button',{name:'Редагувати',exact:true}).click();
+  await page.getByLabel('Прошу').fill('Локальні незбережені зміни');
+  await second.getByRole('button',{name:'Редагувати',exact:true}).click();
+  await second.getByLabel('Прошу').fill('Зміни іншої сесії');
+  await second.getByRole('button',{name:'Зберегти документ',exact:true}).click();
+  await expect(second.getByRole('button',{name:'Редагувати',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Зберегти документ',exact:true}).click();
+  await expect(page.getByRole('alert')).toContainText(/змінено|версі/i);
+  await expect(page.getByLabel('Прошу')).toHaveValue('Локальні незбережені зміни');
+  await page.getByRole('button',{name:'Завантажити актуальну версію'}).click();
+  await expect(page.getByLabel('Прошу')).toHaveValue('Зміни іншої сесії');
+  await page.getByLabel('Прошу').fill('');
+  await page.getByRole('button',{name:'Зберегти документ',exact:true}).click();
+  await expect(page.getByText('Обов’язкове поле',{exact:true})).toBeVisible();
+  await second.close();
+  await page.goto('/documents/99999999');
+  await expect(page.getByRole('alert')).toBeVisible();
+  await logout(page);
+});
+
+test('адміністратор керує користувачами й версіями шаблонів', async ({page},info)=>{
+  await login(page,'admin');
+  await page.goto('/users');
+  const username=`qa_${info.project.name}_${Date.now()}`;
+  await page.getByLabel('Логін',{exact:true}).fill(username);
+  await page.getByLabel('Пароль',{exact:true}).fill(password);
+  await page.getByRole('combobox',{name:'Роль',exact:true}).selectOption('manager');
+  await page.getByRole('button',{name:'Зберегти користувача'}).click();
+  await expect(page.getByRole('button',{name:`Редагувати ${username}`,exact:true})).toBeVisible();
+  await page.getByRole('button',{name:`Редагувати ${username}`,exact:true}).click();
+  await page.getByLabel('Активний користувач').uncheck();
+  await page.getByRole('button',{name:'Зберегти користувача'}).click();
+  await expect(page.getByRole('row').filter({hasText:username})).toContainText('Заблокований');
+  await overflow(page);
+  await page.goto('/template-admin');
+  const name=`QA шаблон ${info.project.name} ${Date.now()}`;
+  await page.getByLabel('Назва шаблону').fill(name);
+  await page.getByRole('textbox',{name:'Опис',exact:true}).fill('Лише демонстраційний QA шаблон');
+  await page.getByRole('button',{name:'Зберегти шаблон',exact:true}).click();
+  await expect(page.getByRole('button',{name:`Редагувати ${name}`,exact:true})).toBeVisible();
+  await page.getByRole('button',{name:`Редагувати ${name}`,exact:true}).click();
+  await page.getByRole('textbox',{name:'Опис',exact:true}).fill('Друга версія прикладу');
+  await page.getByRole('button',{name:'Зберегти шаблон',exact:true}).click();
+  await expect(page.getByRole('row').filter({hasText:name}).getByRole('cell').nth(1)).toHaveText('2');
+  await overflow(page);
+  await page.screenshot({path:info.outputPath('admin.png'),fullPage:true});
+});

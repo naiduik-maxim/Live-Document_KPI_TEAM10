@@ -1,0 +1,16 @@
+# Isolated PostgreSQL database and synthetic identities for E2E; never the app DB.
+# docker compose -p living-documents-test -f compose.yaml -f compose.test.yaml up --build -d
+services:
+  db:
+    ports: !reset []
+    environment:
+      POSTGRES_DB: living_documents_e2e
+  backend:
+    environment:
+      POSTGRES_DB: living_documents_e2e
+      CSRF_TRUSTED_ORIGINS: http://localhost:8081,http://127.0.0.1:8081,.ngrok-free.dev,.ngrok-free.app
+    volumes:
+      - ./tests:/tests:ro
+  frontend:
+    ports: !override
+      - "127.0.0.1:8081:80"
