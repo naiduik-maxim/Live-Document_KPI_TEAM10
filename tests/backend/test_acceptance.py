@@ -6,7 +6,7 @@ from unittest.mock import patch
 from zipfile import ZipFile
 
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, tag
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -102,6 +102,7 @@ class Base(TestCase):
         )
 
 
+@tag("module1")
 class AuthTests(Base):
     def test_csrf_login_logout_and_expired_session(self):
         c = APIClient(enforce_csrf_checks=True)
@@ -164,6 +165,7 @@ class AuthTests(Base):
         )
 
 
+@tag("module1")
 class PermissionTests(Base):
     def test_other_teacher_direct_endpoints_and_role_escalation(self):
         doc = self.create()
@@ -223,6 +225,7 @@ class PermissionTests(Base):
         )
 
 
+@tag("module2")
 class ValidationTests(Base):
     def test_invalid_fields_and_boundaries(self):
         cases = [
@@ -268,6 +271,7 @@ class ValidationTests(Base):
 
 
 class TemplateTests(Base):
+    @tag("module2")
     def test_schema_required_on_create_but_optional_on_partial_update(self):
         self.client.force_authenticate(self.admin)
         for fields in [
@@ -298,6 +302,7 @@ class TemplateTests(Base):
         self.assertEqual(updated.data["schema"], created.data["schema"])
         self.assertEqual(updated.data["description"], "Only metadata changed")
 
+    @tag("module2")
     def test_seed_is_idempotent_and_templates_differ(self):
         call_command("seed_templates", verbosity=0)
         rows = list(
@@ -315,6 +320,7 @@ class TemplateTests(Base):
             first.description, "QA custom description must survive seed"
         )
 
+    @tag("module2")
     def test_snapshot_preserved(self):
         doc = self.create()
         self.client.force_authenticate(self.admin)
@@ -328,6 +334,7 @@ class TemplateTests(Base):
         old = self.client.get(f'/api/documents/{doc["id"]}/').data
         self.assertEqual(old["template_snapshot"], doc["template_snapshot"])
 
+    @tag("module1")
     def test_template_admin_only(self):
         self.assertEqual(
             self.client.post(
@@ -339,6 +346,7 @@ class TemplateTests(Base):
         )
 
 
+@tag("module3")
 class LifecycleTests(Base):
     def test_full_alternative_cycle_and_completed_immutability(self):
         doc = self.create()
@@ -464,6 +472,7 @@ class LifecycleTests(Base):
 
 
 class RegistryTests(Base):
+    @tag("module1")
     def test_combined_search_filter_sort_pagination_scope(self):
         for title in ["Заява А", "Заява Б", "Заява В"]:
             self.create(title=title)
@@ -497,6 +506,7 @@ class RegistryTests(Base):
             0,
         )
 
+    @tag("module4")
     def test_analytics_scope_empty_and_period(self):
         empty = self.client.get("/api/analytics/").data
         self.assertEqual(empty["total"], 0)
@@ -532,6 +542,7 @@ class RegistryTests(Base):
         self.assertEqual(self.client.get("/api/analytics/").data["total"], 3)
 
 
+@tag("module4")
 class ExportTests(Base):
     def test_zero_is_rendered(self):
         self.template.schema = [

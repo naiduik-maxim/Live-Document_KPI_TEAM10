@@ -30,7 +30,7 @@ const fields: Field[] = [
     choices: ["Перший", "Другий"],
   },
 ];
-describe("Dynamic document forms", () => {
+describe("[module2] Dynamic document forms", () => {
   it("rejects missing, oversized, out-of-range and unknown choice values", () => {
     const schema = fieldSchema(fields);
     expect(

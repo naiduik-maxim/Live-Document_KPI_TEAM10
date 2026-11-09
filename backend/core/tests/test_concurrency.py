@@ -4,12 +4,13 @@ from unittest import skipUnless
 
 from django.contrib.auth import get_user_model
 from django.db import close_old_connections, connection
-from django.test import TransactionTestCase
+from django.test import TransactionTestCase, tag
 
 from ..models import Template
 from ..services import Conflict, create_document, edit_document
 
 
+@tag("module3")
 @skipUnless(
     connection.vendor == "postgresql", "Real row-lock race requires PostgreSQL"
 )

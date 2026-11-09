@@ -10,7 +10,7 @@ vi.mock("../shared/api/client", () => ({ api: vi.fn() }));
 vi.mock("./routes/AppRoutes", () => ({ AppRoutes: () => <h1>Workspace</h1> }));
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
-it("discards the previous account's cached data on successful login", async () => {
+it("[module1] discards the previous account's cached data on successful login", async () => {
   vi.mocked(api).mockImplementation(async (path) => {
     if (path === "auth/me/") return null as never;
     return { id: 2, username: "second", first_name: "", last_name: "", role: "teacher" } as never;

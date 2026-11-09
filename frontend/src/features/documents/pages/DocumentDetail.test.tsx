@@ -17,7 +17,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("Document edit concurrency", () => {
+describe("[module3] Document edit concurrency", () => {
   it("keeps unsaved input and original version across cache refresh and 409 until explicit reload", async () => {
     const original: Document = {
       id: 1,

@@ -5,12 +5,13 @@ from threading import Barrier
 from unittest import skipUnless
 
 from django.db import close_old_connections, connection
-from django.test import TransactionTestCase
+from django.test import TransactionTestCase, tag
 from rest_framework.test import APIClient
 
 from core.models import Document, DocumentEvent, Template, User
 
 
+@tag("module3")
 @skipUnless(
     connection.vendor == "postgresql", "PostgreSQL row locking required"
 )

@@ -1,7 +1,7 @@
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, tag
 from docx import Document as WordDocument
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
@@ -44,6 +44,7 @@ class BusinessLogicTests(TestCase):
             {"text": "Українська мова\n- Пункт"},
         )
 
+    @tag("module3")
     def test_cycle_and_frozen_age(self):
         d = transition_document(self.teacher, self.doc.id, 1, "submit")
         d = transition_document(
@@ -62,6 +63,7 @@ class BusinessLogicTests(TestCase):
         with self.assertRaises(ValidationError):
             edit_document(self.teacher, d.id, d.version, title="Зміна")
 
+    @tag("module3")
     def test_conflict_and_permissions(self):
         edit_document(self.teacher, self.doc.id, 1, title="Нова назва")
         with self.assertRaises(Conflict):
@@ -71,6 +73,7 @@ class BusinessLogicTests(TestCase):
         with self.assertRaises(ValidationError):
             transition_document(self.manager, self.doc.id, 2, "return", "")
 
+    @tag("module3")
     def test_atomic_history_failure(self):
         with patch.object(
             DocumentEvent.objects,
@@ -83,6 +86,7 @@ class BusinessLogicTests(TestCase):
         self.assertEqual(self.doc.status, "draft")
         self.assertEqual(self.doc.version, 1)
 
+    @tag("module2")
     def test_snapshot_and_docx(self):
         self.template.schema = []
         self.template.save()
@@ -99,6 +103,7 @@ class BusinessLogicTests(TestCase):
             "<script>test</script>", "\n".join(p.text for p in doc.paragraphs)
         )
 
+    @tag("module2")
     def test_validation(self):
         for data in [
             {},
@@ -110,6 +115,7 @@ class BusinessLogicTests(TestCase):
             with self.assertRaises(ValidationError):
                 create_document(self.teacher, "Bad", self.template, data)
 
+    @tag("module4")
     def test_legacy_xml_controls_render_consistently(self):
         self.doc.title = "Заголовок\x01 <script>"
         self.doc.template_snapshot["name"] = "Назва\x02"
@@ -123,6 +129,7 @@ class BusinessLogicTests(TestCase):
         self.assertEqual(word.paragraphs[1].text, "Назва")
         self.assertEqual(word.paragraphs[2].text, "Приклад")
 
+    @tag("module1")
     def test_superuser_api_role_is_consistent(self):
         user = get_user_model().objects.create_superuser(
             "root", password="testing-only-pass"
@@ -140,6 +147,7 @@ class BusinessLogicTests(TestCase):
         update.save()
         self.assertEqual(user.effective_role, "admin")
 
+    @tag("module2")
     def test_non_xml_text_and_huge_numbers_are_validation_errors(self):
         for value in ["Bad\x01", "Bad\ud800", "Bad\uffff"]:
             serializer = CreateDocumentSerializer(
