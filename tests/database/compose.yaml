@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: living_documents_dbtest
+      POSTGRES_USER: dbtest
+      POSTGRES_PASSWORD: local-db-tests-only
+    ports:
+      - "127.0.0.1:55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dbtest -d living_documents_dbtest"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
