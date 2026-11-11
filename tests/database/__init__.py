@@ -1,1 +1,1 @@
-"""PostgreSQL integration checks for the four application modules."""
+"""Integration checks for the complete PostgreSQL database."""

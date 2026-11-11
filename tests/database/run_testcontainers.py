@@ -1,54 +1,36 @@
-"""Run all database modules in one temporary PostgreSQL container."""
+"""Start a disposable PostgreSQL database and run plain SQL tests."""
 
-import argparse
 import os
 from pathlib import Path
-import sys
 
+import pytest
+from psycopg.conninfo import make_conninfo
 from testcontainers.community.postgres import PostgresContainer
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--module", choices=["1", "2", "3", "4"])
-    args = parser.parse_args()
-
-    root = Path(__file__).resolve().parents[2]
-    sys.path[:0] = [str(root / "backend"), str(root)]
-    os.environ["DJANGO_SETTINGS_MODULE"] = "config.settings"
-    os.environ["DJANGO_DEBUG"] = "1"
-
-    import django
-    from django.conf import settings
-    from django.db import connections
-    from django.test.utils import get_runner
-
+    folder = Path(__file__).resolve().parent
+    os.environ["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
     with PostgresContainer(
-        "postgres:16.15-alpine",
-        username="dbtest",
-        password="local-db-tests-only",
-        dbname="living_documents_dbtest",
-        driver=None,
+        "postgres:16.15-alpine", username="dbtest",
+        password="local-db-tests-only", dbname="simple_db_tests", driver=None,
     ) as postgres:
-        settings.DATABASES = {"default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": postgres.dbname,
-            "USER": postgres.username,
-            "PASSWORD": postgres.password,
-            "HOST": postgres.get_container_host_ip(),
-            "PORT": postgres.get_exposed_port(5432),
-        }}
-        django.setup()
-        tags = [f"module{args.module}"] if args.module else None
-        runner = get_runner(settings)(verbosity=2, interactive=False, tags=tags)
+        os.environ["DB_TEST_DSN"] = make_conninfo(
+            host=postgres.get_container_host_ip(),
+            port=postgres.get_exposed_port(5432),
+            dbname=postgres.dbname, user=postgres.username,
+            password=postgres.password,
+        )
         try:
-            failures = runner.run_tests(["tests.database"])
+            result = pytest.main([
+                str(folder / "test_database.py"), "-v", "-s",
+                "--tb=short", "-p", "no:cacheprovider",
+            ])
         finally:
-            connections.close_all()
-
+            os.environ.pop("DB_TEST_DSN", None)
     print("PostgreSQL container removed.")
-    return bool(failures)
+    return result
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())
