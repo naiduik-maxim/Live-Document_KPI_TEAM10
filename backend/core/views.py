@@ -11,15 +11,19 @@ from django.middleware.csrf import get_token
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_protect
 from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
-from rest_framework import status, viewsets
+from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import AuthenticationFailed, ValidationError
+from rest_framework.exceptions import (
+    AuthenticationFailed,
+    PermissionDenied,
+    ValidationError,
+)
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Document, Template, User
-from .permissions import IsAdmin
+from .permissions import CanUseDocuments, IsAdmin
 from .rendering import render_docx, render_html
 from .serializers import (
     CreateDocumentSerializer,
@@ -94,23 +98,39 @@ class MeView(APIView):
         return Response(UserSerializer(request.user).data)
 
 
-class UserViewSet(viewsets.ModelViewSet):
+class UserViewSet(mixins.UpdateModelMixin, viewsets.ReadOnlyModelViewSet):
     """Дозволити керування ролями лише адміністраторам на сервері."""
 
     permission_classes = [IsAdmin]
     serializer_class = UserAdminSerializer
     queryset = User.objects.order_by("username", "id")
-    http_method_names = ["get", "post", "patch", "head", "options"]
+    http_method_names = ["get", "patch", "head", "options"]
+
+    def perform_update(self, serializer):
+        user = self.request.user
+        target = serializer.instance
+        if target.is_superuser and not user.is_superuser:
+            raise PermissionDenied(
+                "Цей обліковий запис змінює суперкористувач."
+            )
+        if target.pk == user.pk and (
+            serializer.validated_data.get("role", "admin") != "admin"
+            or not serializer.validated_data.get("is_active", True)
+        ):
+            raise ValidationError(
+                "Власний адміністративний доступ змінити не можна."
+            )
+        serializer.save()
 
 
-class TemplateViewSet(viewsets.ModelViewSet):
+class TemplateViewSet(mixins.UpdateModelMixin, viewsets.ReadOnlyModelViewSet):
     serializer_class = TemplateSerializer
-    http_method_names = ["get", "post", "patch", "head", "options"]
+    http_method_names = ["get", "patch", "head", "options"]
 
     def get_permissions(self):
         return (
             [IsAdmin()]
-            if self.action in ["create", "partial_update"]
+            if self.action == "partial_update"
             else super().get_permissions()
         )
 
@@ -148,6 +168,7 @@ class DocumentViewSet(viewsets.ReadOnlyModelViewSet):
     """Застосувати права до прямого URL перед будь-якою операцією."""
 
     serializer_class = DocumentSerializer
+    permission_classes = [CanUseDocuments]
 
     def get_queryset(self):
         if not self.request.user.is_authenticated:
@@ -261,6 +282,8 @@ class DocumentViewSet(viewsets.ReadOnlyModelViewSet):
 
 class AnalyticsView(APIView):
     """Обчислити показники в БД для доступних користувачу документів."""
+
+    permission_classes = [CanUseDocuments]
 
     @extend_schema(
         responses=OpenApiTypes.OBJECT,

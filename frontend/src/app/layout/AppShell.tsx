@@ -16,35 +16,31 @@ export function AppShell() {
   return (
     <div className="app-layout">
       <aside className="sidebar">
-        <Link to="/" className="brand">
+        <Link to={user.role === "admin" ? "/users" : "/"} className="brand">
           <span className="brand-mark">І</span>
           <span>
             Живі документи<small>КАФЕДРА ІПЗЕ</small>
           </span>
         </Link>
-        <p className="nav-label">РОБОЧИЙ ПРОСТІР</p>
+        <p className="nav-label">
+          {user.role === "admin" ? "АДМІНІСТРУВАННЯ" : "РОБОЧИЙ ПРОСТІР"}
+        </p>
         <nav aria-label="Головна навігація">
-          <NavLink to="/" end>
-            ◫ <span>Огляд та аналітика</span>
-          </NavLink>
-          <NavLink to="/documents">
-            ▤ <span>Реєстр документів</span>
-          </NavLink>
-          <NavLink to="/templates">
-            ⊞ <span>Шаблони</span>
-          </NavLink>
-          <NavLink to="/archive">
-            ▣ <span>Архів</span>
-          </NavLink>
-          {user.role === "admin" && (
+          {user.role === "admin" ? (
             <>
-              <p className="nav-label">АДМІНІСТРУВАННЯ</p>
               <NavLink to="/users">
                 ♙ <span>Користувачі</span>
               </NavLink>
               <NavLink to="/template-admin">
                 ⚙ <span>Керування шаблонами</span>
               </NavLink>
+            </>
+          ) : (
+            <>
+              <NavLink to="/" end>◫ <span>Огляд та аналітика</span></NavLink>
+              <NavLink to="/documents">▤ <span>Реєстр документів</span></NavLink>
+              <NavLink to="/templates">⊞ <span>Шаблони</span></NavLink>
+              <NavLink to="/archive">▣ <span>Архів</span></NavLink>
             </>
           )}
         </nav>

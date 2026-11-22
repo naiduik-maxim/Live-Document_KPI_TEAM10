@@ -63,9 +63,9 @@ export function DocumentDetail() {
   if (!doc.data) return <ErrorBox error={doc.error} />;
   const d = editing && editSnapshot ? editSnapshot : doc.data;
   const own = d.owner.id === user.id;
-  const leader = user.role !== "teacher";
+  const leader = user.role === "manager";
   const editable =
-    (own || user.role === "admin") && ["draft", "returned"].includes(d.status);
+    own && ["draft", "returned"].includes(d.status);
   return (
     <>
       <Link className="back-link" to="/documents">
@@ -223,6 +223,12 @@ export function DocumentDetail() {
               <dd>
                 {d.owner.first_name || d.owner.username} {d.owner.last_name}
               </dd>
+              {["approved", "completed"].includes(d.status) && d.signatories?.manager_name && (
+                <>
+                  <dt>Затвердив керівник</dt>
+                  <dd>{d.signatories.manager_name}</dd>
+                </>
+              )}
               <dt>Створено</dt>
               <dd>{date(d.created_at)}</dd>
               <dt>Остання зміна</dt>

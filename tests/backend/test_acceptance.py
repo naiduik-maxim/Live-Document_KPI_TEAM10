@@ -8,6 +8,7 @@ from zipfile import ZipFile
 from django.core.management import call_command
 from django.test import TestCase, tag
 from django.utils import timezone
+from docx import Document as WordDocument
 from rest_framework.test import APIClient
 
 from core.models import Document, DocumentEvent, Template, User
@@ -272,34 +273,27 @@ class ValidationTests(Base):
 
 class TemplateTests(Base):
     @tag("module2")
-    def test_schema_required_on_create_but_optional_on_partial_update(self):
+    def test_template_edit_validates_schema_and_preserves_it_when_omitted(
+        self,
+    ):
         self.client.force_authenticate(self.admin)
-        for fields in [
-            {},
-            {"schema": []},
-            {"schema": [{"name": "broken", "type": "code"}]},
-        ]:
-            with self.subTest(fields=fields):
-                response = self.client.post(
-                    "/api/templates/",
-                    {"name": "QA schema contract", **fields},
+        url = f"/api/templates/{self.template.pk}/"
+        for schema in [[], [{"name": "broken", "type": "code"}]]:
+            with self.subTest(schema=schema):
+                response = self.client.patch(
+                    url,
+                    {"schema": schema},
                     format="json",
                 )
                 self.assertEqual(response.status_code, 400, response.data)
                 self.assertIn("schema", response.data)
-        created = self.client.post(
-            "/api/templates/",
-            {"name": "QA valid schema", "schema": self.template.schema},
-            format="json",
-        )
-        self.assertEqual(created.status_code, 201, created.data)
         updated = self.client.patch(
-            f'/api/templates/{created.data["id"]}/',
+            url,
             {"description": "Only metadata changed"},
             format="json",
         )
         self.assertEqual(updated.status_code, 200, updated.data)
-        self.assertEqual(updated.data["schema"], created.data["schema"])
+        self.assertEqual(updated.data["schema"], self.template.schema)
         self.assertEqual(updated.data["description"], "Only metadata changed")
 
     @tag("module2")
@@ -331,18 +325,139 @@ class TemplateTests(Base):
         )
         self.assertEqual(result.status_code, 200, result.data)
         self.assertGreater(result.data["version"], 1)
+        self.client.force_authenticate(self.teacher)
         old = self.client.get(f'/api/documents/{doc["id"]}/').data
         self.assertEqual(old["template_snapshot"], doc["template_snapshot"])
 
     @tag("module1")
     def test_template_admin_only(self):
         self.assertEqual(
-            self.client.post(
-                "/api/templates/",
-                {"name": "Hack", "schema": []},
+            self.client.patch(
+                f"/api/templates/{self.template.pk}/",
+                {"name": "Hack"},
                 format="json",
             ).status_code,
             403,
+        )
+
+
+class AdminAndSignatoryTests(Base):
+    def test_application_admin_can_edit_users_and_templates_only(self):
+        doc = self.create()
+        url = f'/api/documents/{doc["id"]}/'
+        self.client.force_authenticate(self.admin)
+        for path in [
+            "/api/documents/",
+            url,
+            url + "preview/",
+            url + "export/",
+            "/api/analytics/",
+        ]:
+            self.assertEqual(self.client.get(path).status_code, 403, path)
+        self.assertEqual(self.client.post("/api/documents/").status_code, 403)
+        self.assertEqual(self.client.patch(url).status_code, 403)
+        self.assertEqual(
+            self.client.post(url + "transition/").status_code, 403
+        )
+        for resource, pk in (
+            ("users", self.teacher.pk),
+            ("templates", self.template.pk),
+        ):
+            endpoint = f"/api/{resource}/"
+            self.assertEqual(self.client.get(endpoint).status_code, 200)
+            self.assertEqual(self.client.post(endpoint).status_code, 405)
+            self.assertEqual(
+                self.client.delete(f"{endpoint}{pk}/").status_code, 405
+            )
+        profile = {
+            "email": "teacher@example.test",
+            "position": "Викладач",
+            "phone": "+380 44 555 77 88",
+        }
+        endpoint = f"/api/users/{self.teacher.pk}/"
+        response = self.client.patch(endpoint, profile, format="json")
+        self.assertEqual(response.status_code, 200, response.data)
+        saved = self.client.get(endpoint).data
+        self.assertEqual({key: saved[key] for key in profile}, profile)
+
+    def test_document_captures_creator_and_approver_profiles(self):
+        self.teacher.first_name = "Олена"
+        self.teacher.last_name = "Шевченко"
+        self.teacher.position = "Викладач"
+        self.teacher.phone = "+380 44 555 77 88"
+        self.teacher.email = "olena@example.test"
+        self.teacher.save()
+        signatories = {
+            "executor_name": "Олена Шевченко",
+            "executor_position": "Викладач",
+            "executor_phone": "+380 44 555 77 88",
+            "executor_email": "olena@example.test",
+        }
+        doc = self.create(
+            signatories={
+                "executor_name": "Підставний виконавець",
+                "executor_email": "other@example.test",
+                "manager_name": "Вказано автором",
+            }
+        )
+        url = f'/api/documents/{doc["id"]}/'
+        self.assertEqual(doc["signatories"], signatories)
+        self.teacher.phone = "5550000"
+        self.teacher.save(update_fields=["phone"])
+        response = self.client.patch(
+            url,
+            {
+                "version": doc["version"],
+                "title": "Уточнена заява",
+                "signatories": {
+                    "executor_phone": "5559999",
+                    "manager_name": "Підмінене ім’я",
+                },
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["signatories"], signatories)
+        submitted = self.transition(response.data, "submit").data
+        rejected = self.transition(submitted, "approve")
+        self.assertEqual(rejected.status_code, 403)
+        self.assertEqual(self.client.get(url).data["signatories"], signatories)
+        self.manager.first_name = "Іван"
+        self.manager.last_name = "Петренко <Керівник>"
+        self.manager.save()
+        approved = self.transition(submitted, "approve", self.manager)
+        self.assertEqual(approved.status_code, 200, approved.data)
+        signatories["manager_name"] = "Іван Петренко <Керівник>"
+        self.assertEqual(approved.data["signatories"], signatories)
+
+        self.manager.last_name = "Оновлене прізвище"
+        self.manager.save(update_fields=["last_name"])
+        completed = self.transition(approved.data, "complete")
+        self.assertEqual(completed.status_code, 200, completed.data)
+        self.assertEqual(completed.data["signatories"], signatories)
+        html = self.client.get(url + "preview/").data["html"]
+        self.assertIn("Іван Петренко &lt;Керівник&gt;", html)
+        self.assertIn(signatories["executor_phone"], html)
+        self.assertIn(signatories["executor_email"], html)
+        self.assertLess(
+            html.index("Перший абзац"), html.index("Контактний телефон")
+        )
+        export = self.client.get(url + "export/")
+        self.assertEqual(export.status_code, 200)
+        word = WordDocument(BytesIO(b"".join(export.streaming_content)))
+        last_table = word.tables[-1]
+        self.assertEqual(last_table.cell(0, 0).text, "Керівник")
+        self.assertIn("(підпис)", last_table.cell(0, 1).text)
+        self.assertIn(signatories["manager_name"], last_table.cell(0, 2).text)
+        self.assertIn(
+            signatories["executor_position"], last_table.cell(1, 1).text
+        )
+        self.assertIn(signatories["executor_name"], last_table.cell(1, 2).text)
+        self.assertEqual(
+            last_table.cell(2, 1).text, signatories["executor_phone"]
+        )
+        self.assertEqual(
+            last_table.cell(3, 1).text, signatories["executor_email"]
         )
 
 

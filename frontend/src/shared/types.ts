@@ -9,6 +9,7 @@ export type User = {
   role: Role;
   is_active: boolean;
 };
+export type ManagedUser = User & { position: string; phone: string };
 /** Декларативне поле шаблону: дані для форми, без HTML чи виконуваних виразів. */
 export type Field = {
   name: string;
@@ -42,6 +43,13 @@ export type DocEvent = {
   comment: string;
   created_at: string;
 };
+export type Signatories = {
+  manager_name?: string;
+  executor_name?: string;
+  executor_position?: string;
+  executor_phone?: string;
+  executor_email?: string;
+};
 /** Збережений snapshot визначає поля старого документа незалежно від каталогу. */
 export type Document = {
   id: number;
@@ -53,6 +61,7 @@ export type Document = {
     "name" | "description" | "version" | "schema"
   >;
   data: Record<string, string | number>;
+  signatories?: Signatories;
   status: Status;
   version: number;
   created_at: string;

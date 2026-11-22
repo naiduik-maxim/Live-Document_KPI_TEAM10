@@ -11,9 +11,24 @@ from .validation import validate_schema
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
-    fieldsets = UserAdmin.fieldsets + (("Роль", {"fields": ("role",)}),)
+    fieldsets = UserAdmin.fieldsets + (
+        ("Роль", {"fields": ("role",)}),
+        ("Реквізити виконавця", {"fields": ("position", "phone")}),
+    )
     add_fieldsets = UserAdmin.add_fieldsets + (
         ("Роль", {"fields": ("role",)}),
+        (
+            "Реквізити виконавця",
+            {
+                "fields": (
+                    "first_name",
+                    "last_name",
+                    "email",
+                    "position",
+                    "phone",
+                )
+            },
+        ),
     )
 
 

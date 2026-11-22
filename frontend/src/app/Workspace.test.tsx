@@ -80,14 +80,16 @@ it.each([
   expect(screen.queryByRole("link", { name: /Керування шаблонами/ })).not.toBeInTheDocument();
 });
 
-it("[module1] opens administrative pages for the admin role", async () => {
-  openPage("/users", {
+it("[module1] redirects the admin from a document URL to user administration", async () => {
+  const requests = openPage("/documents/42", {
     "GET /api/auth/me/": () => Response.json(account("admin")),
     "GET /api/users/?page=1": () => Response.json(emptyPage),
     "GET /api/templates/?page_size=100": () => Response.json(emptyPage),
   });
   expect(await screen.findByRole("heading", { name: "Користувачі" })).toBeVisible();
   expect(screen.getByText("Адміністратор", { selector: "small" })).toBeVisible();
+  expect(screen.queryByRole("link", { name: /Реєстр документів|Аналітика/i })).not.toBeInTheDocument();
+  expect(requests.mock.calls.some(([url]) => url.startsWith("/api/documents"))).toBe(false);
   await userEvent.click(screen.getByRole("link", { name: /Керування шаблонами/ }));
   expect(await screen.findByRole("heading", { name: "Керування шаблонами" })).toBeVisible();
 });
@@ -124,6 +126,8 @@ it("[module2] opens the selected template, saves its fields and previews the dra
   await user.click(within(selected!).getByRole("link", { name: /Використати/ }));
   await user.type(await screen.findByRole("spinbutton", { name: /Години/ }), "4");
   await user.type(screen.getByRole("textbox", { name: /Назва документа/ }), title);
+  expect(screen.getByText(/Реквізити виконавця заповняться з вашого профілю/)).toBeVisible();
+  expect(screen.queryByLabelText("Контактний телефон виконавця")).not.toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Зберегти документ" }));
   expect(await screen.findByRole("heading", { name: title })).toBeVisible();
   expect(requests).toHaveBeenCalledWith("/api/documents/", expect.objectContaining({

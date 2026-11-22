@@ -8,6 +8,17 @@ from django.utils import timezone
 class User(AbstractUser):
     """Обліковий запис Django з окремою прикладною роллю."""
 
+    position = models.CharField(
+        "посада", max_length=150, blank=True, default="", db_default=""
+    )
+    phone = models.CharField(
+        "контактний телефон",
+        max_length=50,
+        blank=True,
+        default="",
+        db_default="",
+    )
+
     role = models.CharField(
         max_length=10,
         choices=[
@@ -52,6 +63,7 @@ class Document(models.Model):
     template_snapshot = models.JSONField()
     title = models.CharField(max_length=250)
     data = models.JSONField(default=dict)
+    signatories = models.JSONField(default=dict, db_default={})
     status = models.CharField(
         max_length=12, choices=STATUSES, default="draft", db_index=True
     )

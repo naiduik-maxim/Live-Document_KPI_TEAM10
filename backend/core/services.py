@@ -26,11 +26,15 @@ def visible_documents(user):
     qs = Document.objects.select_related("owner", "template").prefetch_related(
         "events__actor"
     )
-    return (
-        qs
-        if user.effective_role in ["manager", "admin"]
-        else qs.filter(owner=user)
-    )
+    require_document_role(user)
+    return qs if user.effective_role == "manager" else qs.filter(owner=user)
+
+
+def require_document_role(user):
+    if user.effective_role not in ("teacher", "manager"):
+        raise PermissionDenied(
+            "Робота з документами доступна викладачам і керівникам."
+        )
 
 
 def check_version(document, version):
@@ -42,6 +46,7 @@ def check_version(document, version):
 @transaction.atomic
 def create_document(user, title, template, data):
     """Створити документ і початкову подію в одній транзакції."""
+    require_document_role(user)
     validate_data(data, template.schema)
     # Копія JSON не ділить вкладені значення з поточним шаблоном.
     snapshot = {
@@ -54,6 +59,12 @@ def create_document(user, title, template, data):
         template=template,
         template_snapshot=snapshot,
         data=data,
+        signatories={
+            "executor_name": user.get_full_name() or user.get_username(),
+            "executor_position": user.position,
+            "executor_phone": user.phone,
+            "executor_email": user.email,
+        },
     )
     DocumentEvent.objects.create(
         document=document,
@@ -69,8 +80,9 @@ def create_document(user, title, template, data):
 def edit_document(user, document_id, version, **changes):
     """Зберегти дозволені поля, нову версію та подію редагування."""
     # Блокування серіалізує записи; version виявляє застарілий запит.
+    require_document_role(user)
     document = Document.objects.select_for_update().get(pk=document_id)
-    if document.owner_id != user.id and user.effective_role != "admin":
+    if document.owner_id != user.id:
         raise PermissionDenied("Редагувати можна лише власні документи.")
     check_version(document, version)
     if document.status not in ["draft", "returned"]:
@@ -104,16 +116,17 @@ def edit_document(user, document_id, version, **changes):
 def transition_document(user, document_id, version, action, comment=""):
     """Перевірити роль і маршрут та атомарно записати статус й аудит."""
     # Рядок залишається заблокованим до завершення atomic-транзакції.
+    require_document_role(user)
     document = Document.objects.select_for_update().get(pk=document_id)
     role = user.effective_role
     if action == "submit" and document.owner_id != user.id:
         raise PermissionDenied("Надсилати документ може лише автор.")
-    if action in ["approve", "return"] and role not in ["manager", "admin"]:
+    if action in ["approve", "return"] and role != "manager":
         raise PermissionDenied("Потрібні права керівника.")
     if (
         action == "complete"
         and document.owner_id != user.id
-        and role not in ["manager", "admin"]
+        and role != "manager"
     ):
         raise PermissionDenied()
     check_version(document, version)
@@ -136,7 +149,12 @@ def transition_document(user, document_id, version, action, comment=""):
     previous = document.status
     document.status = target
     document.version += 1
-    if target == "completed":
+    if target == "approved":
+        document.signatories = {
+            **document.signatories,
+            "manager_name": user.get_full_name() or user.get_username(),
+        }
+    elif target == "completed":
         document.completed_at = timezone.now()
     document.save()
     # Збій запису події відкочує також зміну статусу та версії.

@@ -20,10 +20,10 @@ export function TemplateAdmin() {
         description="Зміни створюють нову версію. Існуючі документи зберігають свій знімок."
       />
       <ErrorBox error={error || list.error} />
-      <section className="panel form-panel">
-        <h2>{selected ? "Редагувати шаблон" : "Новий шаблон"}</h2>
+      {selected && <section className="panel form-panel">
+        <h2>Редагувати шаблон</h2>
         <form
-          key={selected?.id || "new"}
+          key={selected.id}
           className="form-stack"
           onSubmit={async (e) => {
             e.preventDefault();
@@ -35,8 +35,8 @@ export function TemplateAdmin() {
               // JSON.parse перевіряє синтаксис; допустимі поля/обмеження перевіряє API.
               const schema: unknown = JSON.parse(String(values.get("schema")));
               await api(
-                selected ? `templates/${selected.id}/` : "templates/",
-                selected ? "PATCH" : "POST",
+                `templates/${selected.id}/`,
+                "PATCH",
                 {
                   name: values.get("name"),
                   description: values.get("description"),
@@ -75,19 +75,7 @@ export function TemplateAdmin() {
               name="schema"
               rows={12}
               required
-              defaultValue={JSON.stringify(
-                selected?.schema || [
-                  {
-                    name: "recipient",
-                    label: "Адресат",
-                    type: "text",
-                    required: true,
-                    max_length: 200,
-                  },
-                ],
-                null,
-                2,
-              )}
+              defaultValue={JSON.stringify(selected.schema, null, 2)}
             />
             <FieldError error={error} name="schema" />
           </label>
@@ -108,14 +96,12 @@ export function TemplateAdmin() {
             <button className="primary" disabled={busy}>
               {busy ? "Збереження…" : "Зберегти шаблон"}
             </button>
-            {selected && (
-              <button type="button" onClick={() => setSelected(null)}>
-                Скасувати
-              </button>
-            )}
+            <button type="button" onClick={() => setSelected(null)}>
+              Скасувати
+            </button>
           </div>
         </form>
-      </section>
+      </section>}
       <section className="panel spaced">
         {list.isLoading ? (
           <Loading />

@@ -11,6 +11,15 @@ import { TemplateAdmin } from "../../features/admin/pages/TemplateAdmin";
 /** Маршрути авторизованої частини; API повторно перевіряє права на сервері. */
 export function AppRoutes() {
   const user = useUser();
+  if (user.role === "admin") {
+    return (
+      <Routes>
+        <Route path="/users" element={<UsersAdmin />} />
+        <Route path="/template-admin" element={<TemplateAdmin />} />
+        <Route path="*" element={<Navigate to="/users" replace />} />
+      </Routes>
+    );
+  }
   return (
     <Routes>
       <Route path="/" element={<AnalyticsPage />} />
@@ -22,22 +31,8 @@ export function AppRoutes() {
         element={<CreateDocument />}
       />
       <Route path="/documents/:id" element={<DocumentDetail />} />
-      <Route
-        path="/users"
-        element={
-          user.role === "admin" ? <UsersAdmin /> : <Navigate to="/" />
-        }
-      />
-      <Route
-        path="/template-admin"
-        element={
-          user.role === "admin" ? (
-            <TemplateAdmin />
-          ) : (
-            <Navigate to="/" />
-          )
-        }
-      />
+      <Route path="/users" element={<Navigate to="/" replace />} />
+      <Route path="/template-admin" element={<Navigate to="/" replace />} />
       <Route path="/login" element={<Navigate to="/" />} />
       <Route
         path="*"

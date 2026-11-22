@@ -108,7 +108,7 @@ class ExportTests(SimpleTestCase):
         self.assertEqual(word.paragraphs[0].text, "Звіт кафедри")
         self.assertEqual(word.paragraphs[0].style.name, "Title")
         self.assertEqual(
-            [(p.text, p.style.name) for p in word.paragraphs[-3:]],
+            [(p.text, p.style.name) for p in word.paragraphs if p.text][-3:],
             [
                 ("Текст", "Heading 1"),
                 ("Вступ", "Normal"),

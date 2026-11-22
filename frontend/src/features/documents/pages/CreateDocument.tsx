@@ -26,6 +26,10 @@ export function CreateDocument() {
             <p className="notice">
               Демонстраційний бланк · версія {template.data.version}
             </p>
+            <p className="muted small">
+              Реквізити виконавця заповняться з вашого профілю під час створення.
+              Ім’я керівника з’явиться після затвердження.
+            </p>
             <DocumentForm
               fields={template.data.schema}
               onSave={async (values) => {

@@ -42,9 +42,17 @@ class UserAdminSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "email",
+            "position",
+            "phone",
             "role",
             "is_active",
         ]
+
+    def validate_position(self, value):
+        return validate_xml_text(value)
+
+    def validate_phone(self, value):
+        return validate_xml_text(value)
 
     def validate(self, attrs):
         if (
@@ -147,6 +155,7 @@ class DocumentSerializer(serializers.ModelSerializer):
             "template",
             "template_snapshot",
             "data",
+            "signatories",
             "status",
             "version",
             "created_at",
